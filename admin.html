@@ -359,23 +359,30 @@
         }
 
         function inyectarTarjetasEnPantalla(negocios) {
+            // 1. Construimos las opciones dinámicas UNA SOLA VEZ fuera del bucle para máxima velocidad
+            let arrayOpcionesBase = [];
+            categoriasDescubiertas.forEach(nombreCat => {
+                arrayOpcionesBase.push({ texto: nombreCat, nombreCat: nombreCat });
+            });
+            arrayOpcionesBase.sort((a, b) => a.texto.localeCompare(b.texto));
+
             negocios.forEach(negocio => {
                 let rubroSugeridoCliente = negocio.categoria_nombre || "";
                 if (rubroSugeridoCliente === "Ninguno (Eligió del listado)") rubroSugeridoCliente = "";
                 
-                let arrayOpcionesAdmin = [];
+                let opcionesHTML = `<option value="99" ${negocio.categoria_id === 99 && !rubroSugeridoCliente ? 'selected' : ''}>⚠️ PERSONALIZADA / OTRA</option>`;
+
                 if (negocio.categoria_id && negocio.categoria_id !== 99) {
                     const nombreFijo = CATEGORIAS_BASE_NOMBRES[negocio.categoria_id];
-                    if (nombreFijo) arrayOpcionesAdmin.push({ texto: nombreFijo, html: `<option value="${negocio.categoria_id}" selected>${nombreFijo}</option>` });
+                    if (nombreFijo) {
+                        opcionesHTML += `<option value="${negocio.categoria_id}" selected>${nombreFijo}</option>`;
+                    }
                 }
-                categoriasDescubiertas.forEach(nombreCat => {
-                    const esLaActual = (negocio.categoria_nombre === nombreCat);
-                    arrayOpcionesAdmin.push({ texto: nombreCat, html: `<option value="DINAMICA" ${esLaActual ? 'selected' : ''}>✨ ${nombreCat}</option>` });
-                });
 
-                arrayOpcionesAdmin.sort((a, b) => a.texto.localeCompare(b.texto));
-                let opcionesHTML = `<option value="99" ${negocio.categoria_id === 99 && !rubroSugeridoCliente ? 'selected' : ''}>⚠️ PERSONALIZADA / OTRA</option>`;
-                arrayOpcionesAdmin.forEach(opc => opcionesHTML += opc.html);
+                arrayOpcionesBase.forEach(opc => {
+                    const esLaActual = (negocio.categoria_nombre === opc.nombreCat);
+                    opcionesHTML += `<option value="DINAMICA" ${esLaActual ? 'selected' : ''}>✨ ${opc.nombreCat}</option>`;
+                });
 
                 let arrayFotosOriginal = [];
                 try { arrayFotosOriginal = JSON.parse(negocio.fotos_urls || "[]"); } catch(e) { arrayFotosOriginal = []; }
@@ -448,6 +455,17 @@
                 `;
                 listaContenedor.appendChild(card);
                 renderizarFotosGrid(negocio.id);
+            });
+        }
+
+        function renderizarFotosGrid(idNegocio) {
+            const contenedorGrid = document.getElementById(`grid-fotos-${idNegocio}`);
+            if (!contenedorGrid) return; contenedorGrid.innerHTML = "";
+            (fotosPorNegocio[idNegocio] || []).forEach((url, index) => {
+                const item = document.createElement('div');
+                item.className = 'item-foto-editable';
+                item.innerHTML = `<img src="${url}" loading="lazy"><button class="btn-borrar-foto" onclick="eliminarFotoDelAlbum(${idNegocio}, ${index})">×</button>`;
+                contenedorGrid.appendChild(item);
             });
         }
 
