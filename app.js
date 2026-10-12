@@ -1,0 +1,433 @@
+// Configuración de conexión a tu Supabase (Accesos Oficiales de Encuéntralo PZO)
+const SUPABASE_URL = 'https://xhgsxguqivqmkmbphgfm.supabase.co'; 
+const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InhoZ3N4Z3VxaXZxbWttYnBoZ2ZtIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODEzNjMwMzYsImV4cCI6MjA5NjkzOTAzNn0.BD8GToWv_sAYPWx4Rmnxzom_ebHnc0ZQNNIaViBeMd4'; 
+const supabaseClient = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+
+// Listado estático de referencia para los nombres de categorías base
+const CATEGORIAS_BASE = {
+    1: "🍰 Pastelerías y Reposterías",
+    2: "🍔 Restaurantes y Comida Rápida",
+    3: "🛠️ Ferreterías y Construcción",
+    4: "🏍️ Repuestos y Mecánica",
+    5: "🛍️ Tiendas de Ropa y Calzado"
+};
+
+// Captura de los elementos REALES de tu index.html
+const inputBusqueda = document.getElementById('input-busqueda');
+const btnBuscar = document.getElementById('btn-buscar');
+const contenedorComercios = document.getElementById('resultados-busqueda');
+
+// Caché optimizada en memoria
+let todosLosNegociosActivos = [];
+let negociosFiltradosEnMemoria = [];
+
+function normalizarTextoParaFiltro(texto) {
+    if (!texto) return "";
+    return texto.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").trim();
+}
+
+async function inicializarInterfaz() {
+    contenedorComercios.innerHTML = "<p style='text-align:center; color:#666; font-size:14px;'>Sincronizando comercios de Guayana...</p>";
+    
+    try {
+        // Consulta optimizada con productos_tags restaurado para búsqueda rápida
+        const { data: negocios, error } = await supabaseClient
+            .from('negocios')
+            .select('id, nombre_negocio, direccion, whatsapp, maps, total_votos, suma_calificaciones, categoria_id, categoria_nombre, espacio, promocion_texto, sector, productos_tags')
+            .eq('estado', 'activo');
+
+        if (error) throw error;
+
+        todosLosNegociosActivos = negocios || [];
+        negociosFiltradosEnMemoria = [...todosLosNegociosActivos];
+        
+        mostrarArbolCategoriasDisponibles();
+
+    } catch (err) {
+        console.error("Error de sincronización inicial:", err.message);
+        contenedorComercios.innerHTML = "<p style='text-align:center; color:red; font-size:14px;'>Error de conexión con el servidor comercial.</p>";
+    }
+}
+
+function mostrarArbolCategoriasDisponibles() {
+    let mapaContador = {};
+    
+    todosLosNegociosActivos.forEach(negocio => {
+        let nombreRubro = "";
+        if (negocio.categoria_id && negocio.categoria_id !== 99) {
+            nombreRubro = CATEGORIAS_BASE[negocio.categoria_id] || "Otros Rubros";
+        } else {
+            nombreRubro = negocio.categoria_nombre || "⚠️ Rubro sin clasificar";
+        }
+        mapaContador[nombreRubro] = (mapaContador[nombreRubro] || 0) + 1;
+    });
+
+    let htmlBotones = `
+        <div style="display: flex; justify-content: center; align-items: center; gap: 15px; margin-top: 10px; margin-bottom: 20px; flex-wrap: wrap;">
+            <span style="font-weight: bold; color: #444; font-size: 15px;">Explora por categorías:</span>
+            <button onclick="cargarPantallaSoloPromociones()" style="background-color: #FF5722; border: none; border-radius: 25px; padding: 6px 16px; font-size: 13px; font-weight: bold; color: white; cursor: pointer; display: inline-flex; align-items: center; gap: 4px; box-shadow: 0 4px 10px rgba(255,87,34,0.25);">
+                <span>🔥 PROMOCIONES</span>
+            </button>
+        </div>
+        <div style="display: flex; flex-wrap: wrap; gap: 12px; justify-content: center; align-items: center; margin-top: 5px;">
+    `;
+    
+    Object.keys(mapaContador).sort().forEach(rubro => {
+        let rubroLimpio = rubro.replace(/[\u1F00-\u1F9F]|[\u2700-\u27BF]|[\u2600-\u26FF]/g, "").trim();
+        
+        htmlBotones += `
+            <button onclick="filtrarPorRubroSeleccionado('${rubro}')" style="background-color: white; border: 1px solid #eef2f5; border-radius: 25px; padding: 10px 22px; font-size: 14px; font-weight: bold; color: #222; cursor: pointer; display: inline-flex; align-items: center; gap: 6px; box-shadow: 0 4px 10px rgba(0,0,0,0.04);">
+                <span style="color: #FF5722;">✨</span>
+                <span>${rubroLimpio.toUpperCase()}</span>
+            </button>
+        `;
+    });
+
+    htmlBotones += '</div>';
+    contenedorComercios.innerHTML = htmlBotones;
+}
+
+function filtrarPorRubroSeleccionado(nombreRubro) {
+    let filtrados = todosLosNegociosActivos.filter(negocio => {
+        let rubroTienda = (negocio.categoria_id && negocio.categoria_id !== 99) 
+            ? CATEGORIAS_BASE[negocio.categoria_id] 
+            : negocio.categoria_nombre;
+        return rubroTienda === nombreRubro;
+    });
+    renderizarTarjetasEnLista(filtrados, `Rubro: ${nombreRubro}`);
+}
+
+function ejecutarFiltroBuscadorGeneral() {
+    const palabraClave = normalizarTextoParaFiltro(inputBusqueda.value);
+    
+    if (palabraClave === "") {
+        mostrarArbolCategoriasDisponibles();
+        return;
+    }
+
+    let resultados = todosLosNegociosActivos.filter(negocio => {
+        const nombre = normalizarTextoParaFiltro(negocio.nombre_negocio);
+        const tags = normalizarTextoParaFiltro(negocio.productos_tags);
+        const direccion = normalizarTextoParaFiltro(negocio.direccion);
+        return nombre.includes(palabraClave) || tags.includes(palabraClave) || direccion.includes(palabraClave);
+    });
+
+    if (resultados.length === 0) {
+        contenedorComercios.innerHTML = "<p style='text-align:center; color:#888; padding: 20px;'>No encontramos comercios que coincidan con tu búsqueda.</p>";
+        return;
+    }
+
+    const categoriasUnicas = [...new Set(resultados.map(n => {
+        return (n.categoria_id && n.categoria_id !== 99) ? CATEGORIAS_BASE[n.categoria_id] : n.categoria_nombre;
+    }))];
+
+    let htmlContenido = `
+        <div style="margin-bottom: 20px; text-align: center;">
+            <h3 style="color: #444;">Categorías encontradas:</h3>
+            <p style="font-size: 13px; color: #666;">Selecciona una para filtrar, o mira los resultados directos abajo:</p>
+            <div style="display: flex; flex-wrap: wrap; gap: 10px; justify-content: center; margin-top: 15px;">
+    `;
+
+    categoriasUnicas.forEach(cat => {
+        htmlContenido += `
+            <button onclick="filtrarBusquedaPorCategoria('${cat}', '${inputBusqueda.value}')" 
+            style="background: white; border: 1px solid #007BFF; border-radius: 20px; padding: 8px 16px; font-weight: bold; color: #007BFF; cursor: pointer;">
+                ${cat}
+            </button>
+        `;
+    });
+    htmlContenido += `</div></div>`;
+    
+    htmlContenido += `
+        <div style="margin-top: 20px; margin-bottom: 15px; display: flex; justify-content: space-between; align-items: center;">
+            <h3 style="margin:0; font-size: 16px; color: #444;">Resultados de la búsqueda:</h3>
+            <button onclick="mostrarArbolCategoriasDisponibles(); document.getElementById('input-busqueda').value='';" style="background: #e0e0e0; border: none; padding: 6px 12px; border-radius: 15px; font-size: 12px; font-weight: bold; cursor: pointer;">⬅️ Limpiar</button>
+        </div>
+        <div style="display: flex; flex-direction: column; gap: 15px; padding-bottom: 40px;">
+    `;
+
+    resultados.forEach(negocio => {
+        let numeroLimpio = negocio.whatsapp ? negocio.whatsapp.replace(/\D/g, '') : '';
+        if (numeroLimpio.startsWith('0')) numeroLimpio = '58' + numeroLimpio.substring(1);
+        else if (numeroLimpio.length === 10) numeroLimpio = '58' + numeroLimpio;
+
+        let linkMapsHTML = negocio.maps ? `<a href="${negocio.maps}" target="_blank" onclick="event.stopPropagation();" style="color: #ff5722; font-size: 13px; font-weight: bold; text-decoration: underline;">📍 Ver Mapa</a>` : "";
+            
+        let totalVotos = negocio.total_votos || 0;
+        let sumaCalificaciones = negocio.suma_calificaciones || 0;
+        let promedio = totalVotos === 0 ? "Nuevo" : (sumaCalificaciones / totalVotos).toFixed(1);
+        
+        let badgeEstrella = totalVotos === 0 
+            ? `<span style="font-size: 11px; background: #f8f9fa; color: #888; padding: 3px 8px; border-radius: 10px; font-weight: bold; white-space: nowrap; border: 1px solid #eee;">⭐ Nuevo</span>`
+            : `<span style="font-size: 11px; background: #fff3cd; color: #856404; padding: 3px 8px; border-radius: 10px; font-weight: bold; white-space: nowrap; border: 1px solid #ffeeba;">⭐ ${promedio}</span>`;
+            
+        let textoCategoria = (negocio.categoria_id && negocio.categoria_id !== 99) ? CATEGORIAS_BASE[negocio.categoria_id] : (negocio.categoria_nombre || "General");
+
+        let badgeEspacioApp = '';
+        if (negocio.espacio) {
+            let ico = negocio.espacio === 'AL AIRE LIBRE' ? '🌳' : (negocio.espacio === 'MIXTO (Aire LIBRE & Aire ACONDICIONADO)' ? '⛅' : '🌬️');
+            badgeEspacioApp = `<span style="font-size: 11px; background: #e3f2fd; color: #0d47a1; padding: 3px 8px; border-radius: 10px; font-weight: bold; white-space: nowrap; border: 1px solid #bbdefb;">${ico} ${negocio.espacio}</span>`;
+        }
+
+        htmlContenido += `
+            <div onclick="window.location.href='perfil.html?id=${negocio.id}'" style="background: white; border-radius: 12px; border: 1px solid #eef2f5; padding: 15px; box-shadow: 0 4px 10px rgba(0,0,0,0.02); cursor: pointer; display: flex; flex-direction: column; gap: 6px; position: relative;">
+                <div style="display: flex; justify-content: space-between; align-items: flex-start; gap: 10px;">
+                    <h4 style="margin: 0; font-size: 16px; color: #111;">${negocio.nombre_negocio}</h4>
+                    <div style="display: flex; gap: 6px; align-items: center; flex-wrap: wrap; justify-content: flex-end;">
+                        ${badgeEstrella}
+                        <span style="font-size: 11px; background: #f0f4f8; color: #555; padding: 3px 8px; border-radius: 10px; font-weight: bold; white-space: nowrap;">${textoCategoria}</span>
+                        ${badgeEspacioApp}
+                    </div>
+                </div>
+                <p style="margin: 0; font-size: 13px; color: #555; line-height: 1.4;">${negocio.direccion}</p>
+                <div style="display: flex; justify-content: space-between; align-items: center; gap: 10px; margin-top: 4px; flex-wrap: wrap;">
+                    <div style="display: flex; gap: 12px; align-items: center;">
+                        ${linkMapsHTML}
+                        <span style="color: #007BFF; font-size: 13px; font-weight: bold; text-decoration: underline;">📄 Ver Perfil</span>
+                    </div>
+                    <a href="https://api.whatsapp.com/send?phone=${numeroLimpio}" target="_blank" onclick="event.stopPropagation();" style="background-color: #25D366; color: white; padding: 6px 12px; text-decoration: none; border-radius: 20px; font-weight: bold; font-size: 12px; display: inline-flex; align-items: center; gap: 4px; box-shadow: 0 2px 5px rgba(37, 211, 102, 0.15);">💬 +${numeroLimpio}</a>
+                </div>
+            </div>
+        `;
+    });
+
+    htmlContenido += '</div>';
+    contenedorComercios.innerHTML = htmlContenido;
+}
+
+function filtrarBusquedaPorCategoria(catElegida, terminoBusqueda) {
+    const filtrados = todosLosNegociosActivos.filter(n => {
+        const rubro = (n.categoria_id && n.categoria_id !== 99) ? CATEGORIAS_BASE[n.categoria_id] : n.categoria_nombre;
+        const nombre = normalizarTextoParaFiltro(n.nombre_negocio);
+        const tags = normalizarTextoParaFiltro(n.productos_tags);
+        const direccion = normalizarTextoParaFiltro(n.direccion);
+        const terminoNormalizado = normalizarTextoParaFiltro(terminoBusqueda);
+        
+        return rubro === catElegida && (nombre.includes(terminoNormalizado) || tags.includes(terminoNormalizado) || direccion.includes(terminoNormalizado));
+    });
+
+    renderizarTarjetasEnLista(filtrados, `Resultados en "${catElegida}"`);
+}
+
+function renderizarTarjetasEnLista(listaNegocios, tituloContexto) {
+    let htmlTarjetas = `
+        <div style="margin-top: 20px; margin-bottom: 15px; display: flex; justify-content: space-between; align-items: center;">
+            <h3 style="margin:0; font-size: 16px; color: #444;">${tituloContexto}</h3>
+            <button onclick="mostrarArbolCategoriasDisponibles()" style="background: #e0e0e0; border: none; padding: 6px 12px; border-radius: 15px; font-size: 12px; font-weight: bold; cursor: pointer;">⬅️ Volver</button>
+        </div>
+        <div style="display: flex; flex-direction: column; gap: 15px; padding-bottom: 40px;">
+    `;
+
+    if (listaNegocios.length === 0) {
+        htmlTarjetas += "<p style='text-align:center; color:#888; padding: 20px;'>No encontramos comercios que coincidan.</p></div>";
+        contenedorComercios.innerHTML = htmlTarjetas;
+        return;
+    }
+
+    listaNegocios.forEach(negocio => {
+        let numeroLimpio = negocio.whatsapp ? negocio.whatsapp.replace(/\D/g, '') : '';
+        if (numeroLimpio.startsWith('0')) numeroLimpio = '58' + numeroLimpio.substring(1);
+        else if (numeroLimpio.length === 10) numeroLimpio = '58' + numeroLimpio;
+
+        let linkMapsHTML = negocio.maps ? `<a href="${negocio.maps}" target="_blank" onclick="event.stopPropagation();" style="color: #ff5722; font-size: 13px; font-weight: bold; text-decoration: underline;">📍 Ver Mapa</a>` : "";
+            
+        let totalVotos = negocio.total_votos || 0;
+        let sumaCalificaciones = negocio.suma_calificaciones || 0;
+        let promedio = totalVotos === 0 ? "Nuevo" : (sumaCalificaciones / totalVotos).toFixed(1);
+        
+        let badgeEstrella = totalVotos === 0 
+            ? `<span style="font-size: 11px; background: #f8f9fa; color: #888; padding: 3px 8px; border-radius: 10px; font-weight: bold; white-space: nowrap; border: 1px solid #eee;">⭐ Nuevo</span>`
+            : `<span style="font-size: 11px; background: #fff3cd; color: #856404; padding: 3px 8px; border-radius: 10px; font-weight: bold; white-space: nowrap; border: 1px solid #ffeeba;">⭐ ${promedio}</span>`;
+            
+        let textoCategoria = (negocio.categoria_id && negocio.categoria_id !== 99) ? CATEGORIAS_BASE[negocio.categoria_id] : (negocio.categoria_nombre || "General");
+
+        let badgeEspacioApp = '';
+        if (negocio.espacio) {
+            let ico = negocio.espacio === 'AL AIRE LIBRE' ? '🌳' : (negocio.espacio === 'MIXTO (Aire LIBRE & Aire ACONDICIONADO)' ? '⛅' : '🌬️');
+            badgeEspacioApp = `<span style="font-size: 11px; background: #e3f2fd; color: #0d47a1; padding: 3px 8px; border-radius: 10px; font-weight: bold; white-space: nowrap; border: 1px solid #bbdefb;">${ico} ${negocio.espacio}</span>`;
+        }
+
+        htmlTarjetas += `
+            <div onclick="window.location.href='perfil.html?id=${negocio.id}'" style="background: white; border-radius: 12px; border: 1px solid #eef2f5; padding: 15px; box-shadow: 0 4px 10px rgba(0,0,0,0.02); cursor: pointer; display: flex; flex-direction: column; gap: 6px; position: relative;">
+                <div style="display: flex; justify-content: space-between; align-items: flex-start; gap: 10px;">
+                    <h4 style="margin: 0; font-size: 16px; color: #111;">${negocio.nombre_negocio}</h4>
+                    <div style="display: flex; gap: 6px; align-items: center; flex-wrap: wrap; justify-content: flex-end;">
+                        ${badgeEstrella}
+                        <span style="font-size: 11px; background: #f0f4f8; color: #555; padding: 3px 8px; border-radius: 10px; font-weight: bold; white-space: nowrap;">${textoCategoria}</span>
+                        ${badgeEspacioApp}
+                    </div>
+                </div>
+                <p style="margin: 0; font-size: 13px; color: #555; line-height: 1.4;">${negocio.direccion}</p>
+                <div style="display: flex; justify-content: space-between; align-items: center; gap: 10px; margin-top: 4px; flex-wrap: wrap;">
+                    <div style="display: flex; gap: 12px; align-items: center;">
+                        ${linkMapsHTML}
+                        <span style="color: #007BFF; font-size: 13px; font-weight: bold; text-decoration: underline;">📄 Ver Perfil</span>
+                    </div>
+                    <a href="https://api.whatsapp.com/send?phone=${numeroLimpio}" target="_blank" onclick="event.stopPropagation();" style="background-color: #25D366; color: white; padding: 6px 12px; text-decoration: none; border-radius: 20px; font-weight: bold; font-size: 12px; display: inline-flex; align-items: center; gap: 4px; box-shadow: 0 2px 5px rgba(37, 211, 102, 0.15);">💬 +${numeroLimpio}</a>
+                </div>
+            </div>
+        `;
+    });
+
+    htmlTarjetas += '</div>';
+    contenedorComercios.innerHTML = htmlTarjetas;
+}
+
+function cargarPantallaSoloPromociones() {
+    const localesConOferta = todosLosNegociosActivos.filter(n => n.promocion_texto && n.promocion_texto.trim() !== "");
+
+    let htmlPromos = `
+        <div style="margin-top: 20px; margin-bottom: 15px; display: flex; justify-content: space-between; align-items: center;">
+            <h3 style="margin:0; font-size: 16px; color: #dc3545; font-weight: bold;">🔥 Promociones Activas:</h3>
+            <button onclick="mostrarArbolCategoriasDisponibles()" style="background: #e0e0e0; border: none; padding: 6px 12px; border-radius: 15px; font-size: 12px; font-weight: bold; cursor: pointer;">⬅️ Volver</button>
+        </div>
+    `;
+
+    if (localesConOferta.length === 0) {
+        htmlPromos += "<p style='text-align:center; color:#888; padding: 20px; font-style: italic;'>No hay promociones comerciales activas en este momento.</p>";
+        contenedorComercios.innerHTML = htmlPromos;
+        return;
+    }
+
+    const promosSanFelix = localesConOferta.filter(n => n.sector === 'San Félix');
+    const promosPuertoOrdaz = localesConOferta.filter(n => n.sector === 'Puerto Ordaz');
+    const promosSinSector = localesConOferta.filter(n => !n.sector || (n.sector !== 'San Félix' && n.sector !== 'Puerto Ordaz'));
+
+    const generarTarjetas = (lista) => {
+        if (lista.length === 0) return `<p style="color:#888; font-size:13px; font-style:italic;">No hay promociones activas en esta zona hoy.</p>`;
+        return lista.map(local => `
+            <div style="background: white; border-radius: 10px; border: 1px dashed #dc3545; padding: 15px; box-shadow: 0 4px 10px rgba(0,0,0,0.02); display: flex; flex-direction: column; gap: 6px; margin-bottom: 12px;">
+                <div style="font-size: 14px; line-height: 1.5; color: #222;">
+                    <strong style="color: #111;">${local.nombre_negocio.toUpperCase()}</strong> – <span style="font-weight: 500; color: #4a5568;">${local.promocion_texto}</span>
+                </div>
+                <div style="text-align: right; margin-top: 4px;">
+                    <a href="perfil.html?id=${local.id}" style="color: #007BFF; font-size: 13px; font-weight: bold; text-decoration: underline;">Ver Perfil de la Empresa ➡️</a>
+                </div>
+            </div>
+        `).join('');
+    };
+
+    htmlPromos += `
+        <div style="display: flex; flex-wrap: wrap; gap: 20px; padding-bottom: 20px;">
+            <div style="flex: 1; min-width: 250px;">
+                <h4 style="margin: 0 0 12px 0; color: #111; border-bottom: 2px solid #dc3545; padding-bottom: 5px; font-size: 15px;">📍 San Félix</h4>
+                ${generarTarjetas(promosSanFelix)}
+            </div>
+            <div style="flex: 1; min-width: 250px;">
+                <h4 style="margin: 0 0 12px 0; color: #111; border-bottom: 2px solid #dc3545; padding-bottom: 5px; font-size: 15px;">📍 Puerto Ordaz</h4>
+                ${generarTarjetas(promosPuertoOrdaz)}
+            </div>
+        </div>
+    `;
+
+    if (promosSinSector.length > 0) {
+        htmlPromos += `
+            <div style="padding-bottom: 40px;">
+                <h4 style="margin: 0 0 12px 0; color: #666; border-bottom: 2px solid #ccc; padding-bottom: 5px; font-size: 15px;">📍 Otras Zonas</h4>
+                ${generarTarjetas(promosSinSector)}
+            </div>
+        `;
+    } else {
+        htmlPromos += `<div style="padding-bottom: 40px;"></div>`;
+    }
+
+    contenedorComercios.innerHTML = htmlPromos;
+}
+
+// --- BÚSCADOR OPTIMIZADO CON DEBOUNCE PARA MÁXIMA VELOCIDAD ---
+let temporizadorBusqueda = null;
+inputBusqueda.addEventListener('input', () => {
+    clearTimeout(temporizadorBusqueda);
+    temporizadorBusqueda = setTimeout(() => {
+        ejecutarFiltroBuscadorGeneral();
+    }, 250); // Espera un cuarto de segundo de escritura fluida para ejecutar sin tirones
+});
+btnBuscar.addEventListener('click', ejecutarFiltroBuscadorGeneral);
+
+inicializarInterfaz();
+
+// ==========================================
+// MÓDULO DE SORTEOS PRO (000 al 999)
+// ==========================================
+
+async function verificarEstadoSorteo() {
+    try {
+        const { data, error } = await supabaseClient.from('configuracion').select('sorteo_activo').eq('id', 1).single();
+        if (error) throw error;
+        
+        if (data && data.sorteo_activo === true) {
+            document.getElementById('btn-lanzar-sorteo').style.display = 'inline-block';
+        }
+    } catch (error) {
+        console.error("❌ ERROR AL VERIFICAR EL SORTEO:", error.message);
+    }
+}
+
+async function abrirModalSorteo() {
+    document.getElementById('modal-sorteo').style.display = 'flex';
+    const selectNumeros = document.getElementById('sorteo-numero');
+    selectNumeros.innerHTML = '<option value="" disabled selected>⏳ Buscando números libres...</option>';
+
+    try {
+        const { data, error } = await supabaseClient.from('sorteos').select('numero');
+        if (error) throw error;
+
+        const tomados = data.map(registro => registro.numero);
+        
+        let opcionesLibres = '<option value="" disabled selected>-- Selecciona tu número de la suerte --</option>';
+        for (let i = 0; i <= 999; i++) {
+            let numTexto = i.toString().padStart(3, '0');
+            if (!tomados.includes(numTexto)) {
+                opcionesLibres += `<option value="${numTexto}">${numTexto}</option>`;
+            }
+        }
+        
+        selectNumeros.innerHTML = opcionesLibres;
+
+    } catch (err) {
+        selectNumeros.innerHTML = '<option value="" disabled selected>❌ Error al cargar. Cierra y vuelve a intentar.</option>';
+    }
+}
+
+function cerrarModalSorteo() {
+    document.getElementById('modal-sorteo').style.display = 'none';
+}
+
+document.getElementById('form-sorteo')?.addEventListener('submit', async function(e) {
+    e.preventDefault();
+    const btn = document.getElementById('btn-submit-sorteo');
+    const textoOriginal = btn.innerText;
+    btn.innerText = "⏳ Asegurando tu ticket...";
+    btn.disabled = true;
+
+    const numero = document.getElementById('sorteo-numero').value;
+    const cedula = document.getElementById('sorteo-cedula').value.trim();
+    const nombre = document.getElementById('sorteo-nombre').value.trim();
+    const apellido = document.getElementById('sorteo-apellido').value.trim();
+    const telefono = document.getElementById('sorteo-telefono').value.trim();
+
+    try {
+        const { error } = await supabaseClient
+            .from('sorteos')
+            .insert([{ numero, cedula, nombre, apellido, telefono }]);
+
+        if (error) {
+            if (error.code === '23505') { 
+                throw new Error("🚨 ¡Alguien más rápido se acaba de llevar este número! Por favor, elige otro.");
+            }
+            throw error;
+        }
+
+        alert(`🎉 ¡ÉXITO! Eres el dueño del Ticket #${numero}. ¡Mucha suerte!`);
+        document.getElementById('form-sorteo').reset();
+        cerrarModalSorteo();
+    } catch (err) {
+        alert("❌ Error: " + err.message);
+        abrirModalSorteo(); 
+    } finally {
+        btn.innerText = textoOriginal;
+        btn.disabled = false;
+    }
+});
+
+verificarEstadoSorteo();

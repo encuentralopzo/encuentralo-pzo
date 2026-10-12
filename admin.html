@@ -1,0 +1,699 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Panel de Control Pro Dinámico - Encuéntralo PZO</title>
+    <link rel="icon" type="image/png" href="EN LOGO ADMIN.png">
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    
+    <style>
+        body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; margin: 0; padding: 0; background-color: #f4f6f9; color: #333; }
+        .header-admin { background: #111; color: white; padding: 20px; text-align: center; box-shadow: 0 4px 10px rgba(0,0,0,0.1); }
+        .header-admin h1 { margin: 0; font-size: 24px; color: #FF5722; }
+        .header-admin p { margin: 5px 0 0 0; color: #aaa; font-size: 14px; }
+        .container { max-width: 1100px; margin: 30px auto; padding: 0 20px; }
+        .tabs-navegacion { display: flex; gap: 10px; margin-bottom: 25px; border-bottom: 2px solid #ddd; padding-bottom: 10px; flex-wrap: wrap; }
+        .tab-btn { padding: 12px 25px; font-size: 16px; font-weight: bold; border: none; border-radius: 8px 8px 0 0; cursor: pointer; background-color: #e0e0e0; color: #555; transition: all 0.2s; display: flex; align-items: center; gap: 8px; }
+        .tab-btn.active { background-color: #007BFF; color: white; box-shadow: 0 4px 10px rgba(0,123,255,0.2); }
+        .tab-badge { background-color: rgba(0, 0, 0, 0.1); color: #333; padding: 2px 8px; border-radius: 12px; font-size: 13px; font-weight: bold; }
+        .tab-btn.active .tab-badge { background-color: white; color: #007BFF; }
+        .contador-info { background: white; padding: 15px 20px; border-radius: 8px; margin-bottom: 20px; box-shadow: 0 2px 5px rgba(0,0,0,0.05); font-weight: bold; border-left: 5px solid #007BFF; }
+        .seccion-buscador-admin { background: white; padding: 15px; border-radius: 8px; margin-bottom: 20px; box-shadow: 0 2px 5px rgba(0,0,0,0.05); border-left: 5px solid #FF5722; display: flex; flex-direction: column; gap: 6px; }
+        .seccion-buscador-admin label { font-size: 13px; font-weight: bold; color: #4b5563; }
+        .input-buscar-admin { padding: 11px 15px; border: 1px solid #cbd5e0; border-radius: 6px; font-size: 14px; outline: none; width: 100%; box-sizing: border-box; }
+        .input-buscar-admin:focus { border-color: #007BFF; box-shadow: 0 0 0 3px rgba(0, 123, 255, 0.1); }
+        .panel-categorias-control { background: white; padding: 20px; border-radius: 12px; margin-bottom: 25px; box-shadow: 0 4px 12px rgba(0,0,0,0.05); border: 1px solid #eef2f5; }
+        .panel-categorias-control h3 { margin: 0 0 10px 0; font-size: 16px; color: #111; display: flex; align-items: center; gap: 6px; }
+        .wrapper-lista-categorias { display: flex; flex-direction: column; gap: 8px; margin-top: 12px; }
+        .fila-categoria-gestion { display: flex; gap: 10px; align-items: center; background: #f8fafc; padding: 8px 12px; border-radius: 6px; border: 1px solid #edf2f7; }
+        .fila-categoria-gestion input { flex: 1; padding: 8px; border: 1px solid #cbd5e0; border-radius: 4px; font-size: 13px; }
+        .btn-cat-mod { padding: 8px 14px; border: none; border-radius: 4px; font-size: 12px; font-weight: bold; cursor: pointer; color: white; }
+        .btn-cat-update { background-color: #28a745; }
+        .btn-cat-delete { background-color: #dc3545; }
+        .card-negocio { background: white; border-radius: 12px; box-shadow: 0 4px 15px rgba(0,0,0,0.05); margin-bottom: 25px; border: 1px solid #eef2f5; overflow: hidden; }
+        .card-header { background: #eef2f5; padding: 15px 20px; display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid #ddd; }
+        .card-header h3 { margin: 0; color: #222; font-size: 18px; }
+        .card-body { padding: 20px; display: grid; grid-template-columns: 1fr 1fr; gap: 15px; }
+        @media (max-width: 768px) { .card-body { grid-template-columns: 1fr; } }
+        .form-edit-group { display: flex; flex-direction: column; gap: 5px; }
+        .form-edit-group label { font-size: 12px; font-weight: bold; color: #666; }
+        .form-edit-group input, .form-edit-group select { padding: 10px; border: 1px solid #ccc; border-radius: 6px; font-size: 14px; box-sizing: border-box; }
+        .seccion-categorias { grid-column: 1 / -1; display: grid; grid-template-columns: 1fr 1fr; gap: 15px; background-color: #f8f9fa; padding: 15px; border-radius: 8px; border: 1px solid #e2e8f0; }
+        @media (max-width: 768px) { .seccion-categorias { grid-template-columns: 1fr; } }
+        .fotos-revision { grid-column: 1 / -1; display: flex; gap: 10px; flex-wrap: wrap; margin-top: 10px; background: #fafafa; padding: 15px; border-radius: 8px; border: 1px solid #eee; }
+        .item-foto-editable { position: relative; width: 90px; height: 90px; }
+        .item-foto-editable img { width: 100%; height: 100%; object-fit: cover; border-radius: 6px; border: 1px solid #ddd; cursor: pointer; }
+        .btn-borrar-foto { position: absolute; top: -5px; right: -5px; background: #dc3545; color: white; border: none; border-radius: 50%; width: 22px; height: 22px; font-size: 12px; font-weight: bold; cursor: pointer; display: flex; align-items: center; justify-content: center; box-shadow: 0 2px 4px rgba(0,0,0,0.2); }
+        .herramientas-fotos { width: 100%; display: flex; flex-direction: column; gap: 10px; margin-top: 10px; background: #fff; padding: 12px; border: 1px dashed #007BFF; border-radius: 8px; }
+        .card-footer { background: #fafafa; padding: 15px 20px; text-align: right; border-top: 1px solid #eee; display: flex; justify-content: flex-end; gap: 10px; }
+        .btn-aprobar { background: #007BFF; color: white; border: none; padding: 10px 22px; border-radius: 20px; font-weight: bold; cursor: pointer; }
+        .btn-desactivar { background: #ff9800; color: white; border: none; padding: 10px 22px; border-radius: 20px; font-weight: bold; cursor: pointer; }
+        .btn-rechazar { background: #dc3545; color: white; border: none; padding: 10px 22px; border-radius: 20px; font-weight: bold; cursor: pointer; }
+    </style>
+</head>
+<body>
+
+    <div id="bloqueo-login" style="position: fixed; top:0; left:0; width:100%; height:100%; background: #111; display: flex; justify-content: center; align-items: center; z-index: 9999;">
+        <div style="background: white; padding: 35px 30px; border-radius: 12px; text-align: center; max-width: 350px; width: 90%; box-shadow: 0 10px 25px rgba(0,0,0,0.5);">
+            <h2 style="color: #FF5722; margin: 0 0 5px 0; font-size: 22px;">ENCUÉNTRALO PZO</h2>
+            <p style="color: #666; font-size: 14px; margin-bottom: 20px;">Acceso restringido para administradores</p>
+            <form onsubmit="iniciarSesionAdmin(); return false;" style="margin: 0;">
+                <input type="email" id="admin-email" placeholder="Correo electrónico" style="width: 100%; padding: 12px; margin-bottom: 15px; border: 1px solid #cbd5e0; border-radius: 8px; font-size: 14px; box-sizing: border-box; outline: none;">
+                <input type="password" id="admin-pass" placeholder="Contraseña segura" style="width: 100%; padding: 12px; margin-bottom: 20px; border: 1px solid #cbd5e0; border-radius: 8px; font-size: 14px; box-sizing: border-box; outline: none;">
+                <button type="submit" id="btn-login" style="width: 100%; padding: 14px; background: #007BFF; color: white; border: none; border-radius: 8px; font-weight: bold; cursor: pointer; font-size: 15px; transition: background 0.3s;">Ingresar al Panel</button>
+            </form>
+            <p id="login-error" style="color: #dc3545; font-size: 13px; font-weight: bold; margin-top: 15px; display: none;">❌ Credenciales incorrectas.</p>
+        </div>
+    </div>
+
+    <div class="header-admin">
+        <h1>ENCUÉNTRALO PZO - PANEL CENTRAL PRO</h1>
+        <p>Gestión Inteligente • Categorías Dinámicas y Paginación Ultrarrápida</p>
+    </div>
+
+    <div class="container">
+        <div class="tabs-navegacion">
+            <button id="tab-pendiente" class="tab-btn active" onclick="cambiarPestaña('pendiente')">📥 Solicitudes <span id="badge-count-pendiente" class="tab-badge">...</span></button>
+            <button id="tab-activo" class="tab-btn" onclick="cambiarPestaña('activo')">✅ Activos <span id="badge-count-activo" class="tab-badge">...</span></button>
+            <button id="tab-inactivo" class="tab-btn" onclick="cambiarPestaña('inactivo')">🚫 Inactivos <span id="badge-count-inactivo" class="tab-badge">...</span></button>
+            <button id="tab-rubros" class="tab-btn" onclick="cambiarPestaña('rubros')">✨ Moderar Rubros</button>
+            <button id="tab-sorteos" class="tab-btn" onclick="cambiarPestaña('sorteos')">🎁 Sorteos</button>
+            <button id="tab-reporte" class="tab-btn" onclick="cambiarPestaña('reporte')">📊 Lista Excel</button>
+        </div>
+
+        <div id="seccion-buscador" class="seccion-buscador-admin">
+            <label for="buscar-empresa">🔍 Buscar comercio por Nombre o RIF:</label>
+            <input type="text" id="buscar-empresa" class="input-buscar-admin" placeholder="Escribe el nombre del local o su RIF..." oninput="filtrarComerciosAlVuelo()">
+        </div>
+
+        <div id="panel-moderacion-rubros" class="panel-categorias-control" style="display: none;">
+            <h3>✨ Panel de Control de Rubros Sugeridos</h3>
+            <span style="font-size:12px; color:#666;">Modifica o elimina de raíz los rubros creados por los comerciantes.</span>
+            <div id="lista-categorias-gestion-box" class="wrapper-lista-categorias"></div>
+        </div>
+
+        <!-- PANEL DE SORTEOS PRO -->
+        <div id="panel-sorteos" class="panel-categorias-control" style="display: none;">
+            <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 2px solid #eef2f5; padding-bottom: 15px; margin-bottom: 15px; flex-wrap: wrap; gap: 10px;">
+                <h3 style="margin: 0; font-size: 18px;">🎁 Sorteo (000 al 999)</h3>
+                <div style="display: flex; gap: 10px; align-items: center;">
+                    <button id="btn-toggle-sorteo" onclick="alternarEstadoSorteo()" style="background:#6c757d; color:white; border:none; padding:8px 15px; border-radius:6px; font-weight:bold; cursor:pointer; font-size: 13px;">⏳ Cargando estado...</button>
+                    <button onclick="descargarExcelSorteo()" style="background:#28a745; color:white; border:none; padding:8px 15px; border-radius:6px; font-weight:bold; cursor:pointer; font-size: 13px;">📊 Excel</button>
+                    <button onclick="borrarTodoSorteo()" style="background:#dc3545; color:white; border:none; padding:8px 15px; border-radius:6px; font-weight:bold; cursor:pointer; font-size: 13px;">🗑️ Borrado Total</button>
+                </div>
+            </div>
+            <div style="overflow-x: auto;">
+                <table style="width: 100%; border-collapse: collapse; background: white; font-size: 13px; text-align: left;">
+                    <thead>
+                        <tr style="background: #eef2f5;">
+                            <th style="padding: 12px; border-bottom: 2px solid #ddd;">Ticket</th>
+                            <th style="padding: 12px; border-bottom: 2px solid #ddd;">Cédula</th>
+                            <th style="padding: 12px; border-bottom: 2px solid #ddd;">Cliente</th>
+                            <th style="padding: 12px; border-bottom: 2px solid #ddd;">Teléfono</th>
+                            <th style="padding: 12px; border-bottom: 2px solid #ddd;">Fecha</th>
+                        </tr>
+                    </thead>
+                    <tbody id="tabla-body-sorteos">
+                        <tr><td colspan="5" style="padding: 15px; text-align: center; color: #888;">Cargando...</td></tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+        <!-- PANEL DE REPORTE ACTIVOS -->
+        <div id="panel-reporte" class="panel-categorias-control" style="display: none;">
+            <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 2px solid #eef2f5; padding-bottom: 15px; margin-bottom: 15px; flex-wrap: wrap; gap: 10px;">
+                <h3 style="margin: 0; font-size: 18px;">📊 Reporte de Negocios Activos</h3>
+                <button onclick="descargarExcelActivos()" style="background:#28a745; color:white; border:none; padding:8px 15px; border-radius:6px; font-weight:bold; cursor:pointer; font-size: 13px; display:flex; gap:5px; align-items:center;">
+                    📥 Descargar Excel
+                </button>
+            </div>
+            <div style="overflow-x: auto;">
+                <table style="width: 100%; border-collapse: collapse; background: white; font-size: 13px; text-align: left;">
+                    <thead>
+                        <tr style="background: #eef2f5;">
+                            <th style="padding: 12px; border-bottom: 2px solid #ddd;">Fecha de Registro</th>
+                            <th style="padding: 12px; border-bottom: 2px solid #ddd;">Nombre del Negocio</th>
+                            <th style="padding: 12px; border-bottom: 2px solid #ddd;">RIF</th>
+                            <th style="padding: 12px; border-bottom: 2px solid #ddd;">Nº de Opiniones</th>
+                            <th style="padding: 12px; border-bottom: 2px solid #ddd;">Tipo de Rubro</th>
+                        </tr>
+                    </thead>
+                    <tbody id="tabla-body-reporte">
+                        <tr><td colspan="5" style="padding: 15px; text-align: center; color: #888;">Cargando lista...</td></tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+        <div class="contador-info" id="contador-texto">Conectando...</div>
+        <div id="lista-negocios"></div>
+    </div>
+
+    <script>
+        const SUPABASE_URL = 'https://xhgsxguqivqmkmbphgfm.supabase.co'; 
+        const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InhoZ3N4Z3VxaXZxbWttYnBoZ2ZtIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODEzNjMwMzYsImV4cCI6MjA5NjkzOTAzNn0.BD8GToWv_sAYPWx4Rmnxzom_ebHnc0ZQNNIaViBeMd4'; 
+        const supabaseClient = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+
+        let pestañaActual = 'pendiente'; 
+        const listaContenedor = document.getElementById('lista-negocios');
+        const contadorTexto = document.getElementById('contador-texto');
+        const contenedorGestionCategorias = document.getElementById('lista-categorias-gestion-box');
+
+        let fotosPorNegocio = {};
+        let cacheNegociosDescargados = []; 
+        
+        // 🚀 PAGINACIÓN DEL LADO DEL SERVIDOR
+        let paginaActual = 1;
+        const itemsPorPagina = 25; 
+
+        const CATEGORIAS_BASE_NOMBRES = {
+            1: "🍰 Pastelerías y Reposterías", 2: "🍔 Restaurantes y Comida Rápida",
+            3: "🛠️ Ferreterías y Construcción", 4: "🏍️ Repuestos y Mecánica", 5: "🛍️ Tiendas de Ropa y Calzado"
+        };
+        let categoriasDescubiertas = new Set();
+
+        function cambiarPestaña(tipo) {
+            pestañaActual = tipo;
+            document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+            document.getElementById('tab-' + tipo).classList.add('active');
+            
+            const buscador = document.getElementById('seccion-buscador');
+            const panelRubros = document.getElementById('panel-moderacion-rubros');
+            const panelSorteos = document.getElementById('panel-sorteos');
+            const panelReporte = document.getElementById('panel-reporte');
+            const listaContenedorDiv = document.getElementById('lista-negocios');
+            const contador = document.getElementById('contador-texto');
+
+            buscador.style.display = 'none';
+            listaContenedorDiv.style.display = 'none';
+            contador.style.display = 'none';
+            panelRubros.style.display = 'none';
+            panelSorteos.style.display = 'none';
+            if (panelReporte) panelReporte.style.display = 'none';
+
+            if (tipo === 'rubros') {
+                panelRubros.style.display = 'block';
+                escanearCategoriasExistentes();
+            } else if (tipo === 'sorteos') {
+                panelSorteos.style.display = 'block';
+                cargarSorteosAdmin();
+            } else if (tipo === 'reporte') { 
+                panelReporte.style.display = 'block';
+                cargarReporteActivos();
+            } else {
+                document.getElementById('buscar-empresa').value = ''; 
+                buscador.style.display = 'flex';
+                listaContenedorDiv.style.display = 'block';
+                contador.style.display = 'block';
+                paginaActual = 1;
+                cargarDatos(); 
+            }
+        }
+
+        async function escanearCategoriasExistentes() {
+            categoriasDescubiertas.clear();
+            const { data, error } = await supabaseClient.from('negocios').select('categoria_nombre').not('categoria_nombre', 'is', null);
+            if (!error && data) {
+                data.forEach(row => {
+                    const texto = row.categoria_nombre.trim();
+                    if (texto !== "" && texto !== "Ninguno (Eligió del listado)") categoriasDescubiertas.add(texto);
+                });
+            }
+            renderizarModuloGestionCategorias();
+        }
+
+        function renderizarModuloGestionCategorias() {
+            if (!contenedorGestionCategorias) return;
+            if (categoriasDescubiertas.size === 0) {
+                contenedorGestionCategorias.innerHTML = "<p style='font-size:12px; color:#999; font-style:italic;'>No hay rubros personalizados.</p>";
+                return;
+            }
+            let listaOrdenada = Array.from(categoriasDescubiertas).sort((a,b) => a.localeCompare(b));
+            let htmlAcumulado = "";
+            listaOrdenada.forEach((nombreCat, index) => {
+                htmlAcumulado += `
+                    <div class="fila-categoria-gestion">
+                        <input type="text" id="input-global-cat-${index}" value="${nombreCat}">
+                        <button class="btn-cat-mod btn-cat-update" onclick="renombrarCategoriaGlobalInMass('${nombreCat}', ${index})">✏️ Renombrar en Masa</button>
+                        <button class="btn-cat-mod btn-cat-delete" onclick="eliminarCategoriaGlobalInMass('${nombreCat}')">🗑️ Eliminar</button>
+                    </div>
+                `;
+            });
+            contenedorGestionCategorias.innerHTML = htmlAcumulado;
+        }
+
+        async function renombrarCategoriaGlobalInMass(nombreViejo, indexInput) {
+            const nuevoNombre = document.getElementById(`input-global-cat-${indexInput}`).value.trim();
+            if (!nuevoNombre || nuevoNombre === nombreViejo) return;
+            if (!confirm(`¿Renombrar "${nombreViejo}" a "${nuevoNombre}"?`)) return;
+            await supabaseClient.from('negocios').update({ categoria_nombre: nuevoNombre }).eq('categoria_id', 99).eq('categoria_nombre', nombreViejo);
+            cargarDatos();
+        }
+
+        async function eliminarCategoriaGlobalInMass(nombreCat) {
+            if (!confirm(`🚨 ¿Eliminar rubro "${nombreCat}"?`)) return;
+            await supabaseClient.from('negocios').update({ categoria_nombre: "Ninguno (Eligió del listado)" }).eq('categoria_id', 99).eq('categoria_nombre', nombreCat);
+            cargarDatos();
+        }
+
+        async function actualizarContadoresDePestañas() {
+            const { data, error } = await supabaseClient.from('negocios').select('estado');
+            if (!error && data) {
+                let p = 0, a = 0, i = 0; 
+                data.forEach(item => { 
+                    if (item.estado === 'pendiente') p++; 
+                    if (item.estado === 'activo') a++;
+                    if (item.estado === 'inactivo') i++; 
+                });
+                document.getElementById('badge-count-pendiente').innerText = p;
+                document.getElementById('badge-count-activo').innerText = a;
+                document.getElementById('badge-count-inactivo').innerText = i;
+            }
+        }
+
+        // 🚀 NUEVA FUNCIÓN DE CARGA ULTRARRÁPIDA CON PAGINACIÓN EN SERVIDOR
+        async function cargarDatos() {
+            listaContenedor.innerHTML = "<p style='text-align:center; padding:20px;'>Cargando registros...</p>";
+            await actualizarContadoresDePestañas();
+
+            const termino = document.getElementById('buscar-empresa').value.toLowerCase().trim();
+
+            let queryCount = supabaseClient
+                .from('negocios')
+                .select('*', { count: 'exact', head: true })
+                .eq('estado', pestañaActual);
+
+            let queryData = supabaseClient
+                .from('negocios')
+                .select('*')
+                .eq('estado', pestañaActual)
+                .order('nombre_negocio', { ascending: true });
+
+            if (termino !== "") {
+                queryCount = queryCount.or(`nombre_negocio.ilike.%${termino}%,rif_o_id.ilike.%${termino}%`);
+                queryData = queryData.or(`nombre_negocio.ilike.%${termino}%,rif_o_id.ilike.%${termino}%`);
+            }
+
+            const { count, error: errorCount } = await queryCount;
+            if (errorCount) {
+                console.error(errorCount);
+                contadorTexto.innerText = "Error de conexión.";
+                return;
+            }
+
+            const totalRegistros = count || 0;
+            const totalPaginas = Math.ceil(totalRegistros / itemsPorPagina) || 1;
+            if (paginaActual > totalPaginas) paginaActual = totalPaginas;
+            if (paginaActual < 1) paginaActual = 1;
+
+            const inicio = (paginaActual - 1) * itemsPorPagina;
+            const fin = inicio + itemsPorPagina - 1;
+
+            const { data: negocios, error } = await queryData.range(inicio, fin);
+            if (error) {
+                contadorTexto.innerText = "Error de conexión.";
+                return;
+            }
+
+            cacheNegociosDescargados = negocios || []; 
+            
+            contadorTexto.innerText = pestañaActual === 'pendiente' 
+                ? `📋 Tienes (${totalRegistros}) solicitudes pendientes.` 
+                : `🟢 Hay (${totalRegistros}) comercios activos.`;
+                
+            renderizarPaginaServidor(totalRegistros, totalPaginas);
+        }
+
+        function filtrarComerciosAlVuelo() {
+            paginaActual = 1;
+            cargarDatos();
+        }
+
+        function renderizarPaginaServidor(totalRegistros, totalPaginas) {
+            listaContenedor.innerHTML = "";
+            
+            if (cacheNegociosDescargados.length === 0) {
+                listaContenedor.innerHTML = "<p style='text-align:center; color:#666; padding: 20px;'>No hay registros coincidentes.</p>";
+                return;
+            }
+
+            inyectarTarjetasEnPantalla(cacheNegociosDescargados);
+
+            // --- BARRA DE NAVEGACIÓN DE PÁGINAS ---
+            if (totalPaginas > 1) {
+                let htmlPaginacion = `
+                    <div style="display: flex; justify-content: center; align-items: center; gap: 15px; margin: 25px 0; padding: 15px; background: white; border-radius: 8px; box-shadow: 0 2px 5px rgba(0,0,0,0.05);">
+                        <button onclick="cambiarPagina(-1)" ${paginaActual === 1 ? 'disabled style="opacity:0.4; cursor:not-allowed;"' : 'style="background:#007BFF; color:white; border:none; padding:8px 16px; border-radius:6px; font-weight:bold; cursor:pointer;"'}>⬅️ Anterior</button>
+                        <span style="font-weight: bold; font-size: 14px; color: #444;">Página ${paginaActual} de ${totalPaginas} (${totalRegistros} en total)</span>
+                        <button onclick="cambiarPagina(1)" ${paginaActual === totalPaginas ? 'disabled style="opacity:0.4; cursor:not-allowed;"' : 'style="background:#007BFF; color:white; border:none; padding:8px 16px; border-radius:6px; font-weight:bold; cursor:pointer;"'}>Siguiente ➡️</button>
+                    </div>
+                `;
+                listaContenedor.insertAdjacentHTML('beforeend', htmlPaginacion);
+            }
+        }
+
+        function cambiarPagina(direccion) {
+            paginaActual += direccion;
+            cargarDatos();
+            window.scrollTo({ top: 0, behavior: 'smooth' });
+        }
+
+        function inyectarTarjetasEnPantalla(negocios) {
+            negocios.forEach(negocio => {
+                let rubroSugeridoCliente = negocio.categoria_nombre || "";
+                if (rubroSugeridoCliente === "Ninguno (Eligió del listado)") rubroSugeridoCliente = "";
+                
+                let arrayOpcionesAdmin = [];
+                if (negocio.categoria_id && negocio.categoria_id !== 99) {
+                    const nombreFijo = CATEGORIAS_BASE_NOMBRES[negocio.categoria_id];
+                    if (nombreFijo) arrayOpcionesAdmin.push({ texto: nombreFijo, html: `<option value="${negocio.categoria_id}" selected>${nombreFijo}</option>` });
+                }
+                categoriasDescubiertas.forEach(nombreCat => {
+                    const esLaActual = (negocio.categoria_nombre === nombreCat);
+                    arrayOpcionesAdmin.push({ texto: nombreCat, html: `<option value="DINAMICA" ${esLaActual ? 'selected' : ''}>✨ ${nombreCat}</option>` });
+                });
+
+                arrayOpcionesAdmin.sort((a, b) => a.texto.localeCompare(b.texto));
+                let opcionesHTML = `<option value="99" ${negocio.categoria_id === 99 && !rubroSugeridoCliente ? 'selected' : ''}>⚠️ PERSONALIZADA / OTRA</option>`;
+                arrayOpcionesAdmin.forEach(opc => opcionesHTML += opc.html);
+
+                let arrayFotosOriginal = [];
+                try { arrayFotosOriginal = JSON.parse(negocio.fotos_urls || "[]"); } catch(e) { arrayFotosOriginal = []; }
+                fotosPorNegocio[negocio.id] = arrayFotosOriginal;
+
+                let botonesFooterHTML = '';
+                if (pestañaActual === 'pendiente') {
+                    botonesFooterHTML = `<button class="btn-rechazar" onclick="eliminarRegistro(${negocio.id})">🗑️ Eliminar</button><button class="btn-aprobar" style="background:#28a745;" onclick="guardarTextos(${negocio.id})">💾 Guardar</button><button class="btn-aprobar" onclick="moverEstadoSolo(${negocio.id}, 'activo')">🚀 Aprobar</button>`;
+                } else if (pestañaActual === 'activo') {
+                    botonesFooterHTML = `<button class="btn-rechazar" onclick="eliminarRegistro(${negocio.id})">🗑️ Eliminar</button><button class="btn-desactivar" onclick="moverEstadoSolo(${negocio.id}, 'inactivo')">🚫 Pausar</button><button class="btn-aprobar" style="background:#28a745;" onclick="guardarTextos(${negocio.id})">💾 Guardar</button>`;
+                } else if (pestañaActual === 'inactivo') {
+                    botonesFooterHTML = `<button class="btn-rechazar" onclick="eliminarRegistro(${negocio.id})">🗑️ Eliminar</button><button class="btn-aprobar" onclick="moverEstadoSolo(${negocio.id}, 'activo')">🚀 Reactivar</button><button class="btn-aprobar" style="background:#28a745;" onclick="guardarTextos(${negocio.id})">💾 Guardar</button>`;
+                }
+
+                let numeroLimpio = negocio.whatsapp ? negocio.whatsapp.replace(/\D/g, '') : '';
+                if (numeroLimpio.startsWith('0')) numeroLimpio = '58' + numeroLimpio.substring(1);
+                else if (numeroLimpio.length === 10) numeroLimpio = '58' + numeroLimpio;
+                
+                const btnAdminWhatsapp = (numeroLimpio && numeroLimpio.length >= 11) ? 
+                    `<a href="https://api.whatsapp.com/send?phone=${numeroLimpio}" target="_blank" style="background-color: #25D366; color: white; padding: 6px 16px; border-radius: 20px; text-decoration: none; font-size: 13px; font-weight: bold; display: flex; align-items: center; gap: 5px;">💬 Contactar</a>` 
+                    : `<span style="font-size: 12px; color: #dc3545; font-weight: bold;">⚠️ Inválido</span>`;
+
+                const card = document.createElement('div');
+                card.className = 'card-negocio';
+                card.innerHTML = `
+                    <div class="card-header"><h3>${negocio.nombre_negocio}</h3>${btnAdminWhatsapp}</div>
+                    <div class="card-body">
+                        <div class="form-edit-group"><label>Nombre:</label><input type="text" id="edit-nombre-${negocio.id}" value="${negocio.nombre_negocio}"></div>
+                        <div class="seccion-categorias">
+                            <div class="form-edit-group"><label>Rubro Existente:</label><select id="edit-categoria-${negocio.id}" onchange="manejarCambioSelect(this, ${negocio.id})">${opcionesHTML}</select></div>
+                            <div class="form-edit-group"><label>Nuevo Rubro:</label><input type="text" id="edit-rubro-libre-${negocio.id}" value="${rubroSugeridoCliente}"></div>
+                            
+                            <div class="form-edit-group" style="grid-column: 1 / -1;">
+                                <label>Tipo de Espacio:</label>
+                                <select id="edit-espacio-${negocio.id}">
+                                    <option value="" ${!negocio.espacio ? 'selected' : ''}>Sin especificar</option>
+                                    <option value="AL AIRE LIBRE" ${negocio.espacio === 'AL AIRE LIBRE' ? 'selected' : ''}>Al Aire Libre</option>
+                                    <option value="CON AIRE ACONDICIONADO" ${negocio.espacio === 'CON AIRE ACONDICIONADO' ? 'selected' : ''}>Con Aire Acondicionado</option>
+                                    <option value="MIXTO (Aire LIBRE & Aire ACONDICIONADO)" ${negocio.espacio === 'MIXTO (Aire LIBRE & Aire ACONDICIONADO)' ? 'selected' : ''}>MIXTO (Aire LIBRE & Aire ACONDICIONADO)</option>
+                                </select>
+                            </div>
+                        </div>
+                        <div class="form-edit-group" style="grid-column: 1 / -1;"><label>Tags:</label><input type="text" id="edit-tags-${negocio.id}" value="${negocio.productos_tags || ''}"></div>
+                        <div class="form-edit-group" style="grid-column: 1 / -1;">
+                            <label style="color: #FF5722; font-weight: bold;">🎯 Texto de Promoción / Oferta Especial:</label>
+                            <input type="text" id="edit-promocion-${negocio.id}" placeholder="Ej: 2X1 EN CORTE DE CABELLO POR TAN SOLO 5$" value="${negocio.promocion_texto || ''}">
+                        </div>
+                        <div class="form-edit-group">
+                            <label>Sector:</label>
+                            <select id="edit-sector-${negocio.id}">
+                                <option value="" ${!negocio.sector ? 'selected' : ''}>-- Sin Especificar --</option>
+                                <option value="Puerto Ordaz" ${negocio.sector === 'Puerto Ordaz' ? 'selected' : ''}>Puerto Ordaz</option>
+                                <option value="San Félix" ${negocio.sector === 'San Félix' ? 'selected' : ''}>San Félix</option>
+                            </select>
+                        </div>
+                        <div class="form-edit-group"><label>Dirección:</label><input type="text" id="edit-direccion-${negocio.id}" value="${negocio.direccion || ''}"></div>
+                        <div class="form-edit-group"><label>Horario:</label><input type="text" id="edit-horario-${negocio.id}" value="${negocio.horario || ''}"></div>
+                        <div class="form-edit-group"><label>Maps:</label><input type="text" id="edit-maps-${negocio.id}" value="${negocio.maps || ''}"></div>
+                        <div class="form-edit-group"><label>WhatsApp:</label><input type="text" id="edit-whatsapp-${negocio.id}" value="${negocio.whatsapp || ''}"></div>
+                        <div class="form-edit-group"><label>Instagram:</label><input type="text" id="edit-instagram-${negocio.id}" value="${negocio.instagram || ''}"></div>
+                        <div class="fotos-revision">
+                            <div id="grid-fotos-${negocio.id}" style="display:flex; gap:10px; flex-wrap:wrap; width:100%;"></div>
+                            <div class="herramientas-fotos">
+                                <input type="file" onchange="cargarFotoDesdePC(this, ${negocio.id})">
+                                <input type="text" id="input-nueva-foto-${negocio.id}" placeholder="URL Foto"><button onclick="agregarFotoURL(${negocio.id})">Añadir URL</button>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="card-footer">${botonesFooterHTML}</div>
+                `;
+                listaContenedor.appendChild(card);
+                renderizarFotosGrid(negocio.id);
+            });
+        }
+
+        function renderizarFotosGrid(idNegocio) {
+            const contenedorGrid = document.getElementById(`grid-fotos-${idNegocio}`);
+            if (!contenedorGrid) return; contenedorGrid.innerHTML = "";
+            (fotosPorNegocio[idNegocio] || []).forEach((url, index) => {
+                const item = document.createElement('div');
+                item.className = 'item-foto-editable';
+                item.innerHTML = `<img src="${url}"><button class="btn-borrar-foto" onclick="eliminarFotoDelAlbum(${idNegocio}, ${index})">×</button>`;
+                contenedorGrid.appendChild(item);
+            });
+        }
+
+        function cargarFotoDesdePC(inputElement, idNegocio) {
+            const archivo = inputElement.files[0]; if (!archivo) return;
+            if (fotosPorNegocio[idNegocio].length >= 2) return alert("Máximo 2 fotos permitidas.");
+            const lector = new FileReader();
+            lector.onload = function(e) { fotosPorNegocio[idNegocio].push(e.target.result); renderizarFotosGrid(idNegocio); };
+            lector.readAsDataURL(archivo);
+        }
+
+        function eliminarFotoDelAlbum(idNegocio, index) { fotosPorNegocio[idNegocio].splice(index, 1); renderizarFotosGrid(idNegocio); }
+        function agregarFotoURL(idNegocio) { const input = document.getElementById(`input-nueva-foto-${idNegocio}`); if(input.value.trim()) { fotosPorNegocio[idNegocio].push(input.value.trim()); renderizarFotosGrid(idNegocio); input.value=""; } }
+        function manejarCambioSelect(select, id) { const inputLibre = document.getElementById(`edit-rubro-libre-${id}`); if (select.value === "99") inputLibre.value = ""; else if (select.value === "DINAMICA") inputLibre.value = select.options[select.selectedIndex].text.replace("✨ ", ""); else inputLibre.value = select.options[select.selectedIndex].text; }
+
+        async function moverEstadoSolo(id, nuevoEstado) {
+            if (!confirm(`¿Mover a ${nuevoEstado.toUpperCase()}?`)) return;
+            const { error } = await supabaseClient.from('negocios').update({ estado: nuevoEstado }).eq('id', id);
+            if (error) alert("❌ Error: " + error.message);
+            else { alert("✅ Movido correctamente."); cargarDatos(); }
+        }
+
+        async function guardarTextos(id) {
+            const nombre = document.getElementById(`edit-nombre-${id}`).value.trim();
+            let selectValue = document.getElementById(`edit-categoria-${id}`).value;
+            let tags = document.getElementById(`edit-tags-${id}`).value;
+            let promoTexto = document.getElementById(`edit-promocion-${id}`).value.trim();
+            const sector = document.getElementById(`edit-sector-${id}`).value;
+            const direccion = document.getElementById(`edit-direccion-${id}`).value;
+            const espacioEditado = document.getElementById(`edit-espacio-${id}`).value;
+            const horario = document.getElementById(`edit-horario-${id}`).value;
+            const maps = document.getElementById(`edit-maps-${id}`).value;
+            const whatsapp = document.getElementById(`edit-whatsapp-${id}`).value.replace(/\s+/g, '');
+            const instagram = document.getElementById(`edit-instagram-${id}`) ? document.getElementById(`edit-instagram-${id}`).value.trim() : '';
+            let rubroLibre = document.getElementById(`edit-rubro-libre-${id}`).value.trim();
+
+            let categoriaIdFinal = 99; let categoriaNombreFinal = null;
+            if (selectValue !== "99" && selectValue !== "DINAMICA") { 
+                categoriaIdFinal = parseInt(selectValue); 
+                categoriaNombreFinal = "Ninguno (Eligió del listado)"; 
+            } else { 
+                categoriaIdFinal = 99; 
+                categoriaNombreFinal = rubroLibre || null; 
+            }
+
+            if (!confirm("¿Guardar modificaciones?")) return;
+            
+            const { error } = await supabaseClient.from('negocios').update({ 
+                nombre_negocio: nombre, categoria_id: categoriaIdFinal, categoria_nombre: categoriaNombreFinal, 
+                productos_tags: tags, promocion_texto: promoTexto || null, sector: sector, espacio: espacioEditado === "" ? null : espacioEditado, direccion: direccion, 
+                horario: horario, maps: maps, whatsapp: whatsapp, instagram: instagram, fotos_urls: JSON.stringify(fotosPorNegocio[id])
+            }).eq('id', id);
+
+            if (error) alert("❌ Error: " + error.message);
+            else alert("✅ ¡Datos actualizados!");
+        }
+
+        async function eliminarRegistro(id) { 
+            if (confirm("🚨 ¿Borrar permanentemente?")) { 
+                const { error } = await supabaseClient.from('negocios').delete().eq('id', id); 
+                if (error) alert("❌ ERROR: " + error.message);
+                else { alert("🗑️ Eliminado!"); cargarDatos(); }
+            } 
+        }
+
+        async function verificarSesion() {
+            const { data: { session } } = await supabaseClient.auth.getSession();
+            if (session) { document.getElementById('bloqueo-login').style.display = 'none'; cargarDatos(); }
+        }
+
+        async function iniciarSesionAdmin() {
+            const email = document.getElementById('admin-email').value.trim();
+            const pass = document.getElementById('admin-pass').value.trim();
+            const btn = document.getElementById('btn-login');
+            const errorMsg = document.getElementById('login-error');
+
+            if (!email || !pass) { errorMsg.innerText = "⚠️ Ingresa datos."; errorMsg.style.display = 'block'; return; }
+            btn.innerText = "Verificando..."; btn.disabled = true;
+
+            const { data, error } = await supabaseClient.auth.signInWithPassword({ email: email, password: pass });
+
+            if (error) {
+                errorMsg.innerText = "❌ Credenciales incorrectas."; errorMsg.style.display = 'block';
+                btn.innerText = "Ingresar al Panel"; btn.disabled = false;
+            } else {
+                document.getElementById('bloqueo-login').style.display = 'none'; cargarDatos();
+            }
+        }
+
+        // ==========================================
+        // LÓGICA DE PANEL DE SORTEOS PRO
+        // ==========================================
+        let sorteoEstaActivo = false;
+
+        async function cargarSorteosAdmin() {
+            const tbody = document.getElementById('tabla-body-sorteos');
+            tbody.innerHTML = '<tr><td colspan="5" style="padding: 15px; text-align: center; color: #888;">Cargando participantes...</td></tr>';
+            
+            const { data: config } = await supabaseClient.from('configuracion').select('sorteo_activo').eq('id', 1).single();
+            if (config) {
+                sorteoEstaActivo = config.sorteo_activo;
+                actualizarBotonToggle();
+            }
+
+            const { data, error } = await supabaseClient.from('sorteos').select('*').order('numero', { ascending: true });
+            
+            if (error) return tbody.innerHTML = `<tr><td colspan="5" style="padding: 15px; text-align: center; color: #dc3545;">Error: ${error.message}</td></tr>`;
+            if (!data || data.length === 0) return tbody.innerHTML = '<tr><td colspan="5" style="padding: 15px; text-align: center; color: #666;">Aún no hay números registrados.</td></tr>';
+            
+            let html = '';
+            data.forEach(p => {
+                const fecha = new Date(p.created_at).toLocaleDateString('es-VE', { hour: '2-digit', minute: '2-digit' });
+                html += `
+                    <tr style="border-bottom: 1px solid #edf2f7;">
+                        <td style="padding: 12px; font-weight: bold; color: #FF5722; font-size: 16px;">#${p.numero}</td>
+                        <td style="padding: 12px; font-weight: bold;">${p.cedula}</td>
+                        <td style="padding: 12px;">${p.nombre} ${p.apellido}</td>
+                        <td style="padding: 12px;">${p.telefono}</td>
+                        <td style="padding: 12px; color: #888;">${fecha}</td>
+                    </tr>
+                `;
+            });
+            tbody.innerHTML = html;
+        }
+
+        function actualizarBotonToggle() {
+            const btn = document.getElementById('btn-toggle-sorteo');
+            if (sorteoEstaActivo) {
+                btn.innerText = "🔴 Desactivar Botón del Index";
+                btn.style.background = "#ff9800";
+            } else {
+                btn.innerText = "🟢 Activar Botón del Index";
+                btn.style.background = "#007BFF";
+            }
+        }
+
+        async function alternarEstadoSorteo() {
+            const nuevoEstado = !sorteoEstaActivo;
+            const { error } = await supabaseClient.from('configuracion').update({ sorteo_activo: nuevoEstado }).eq('id', 1);
+            if (!error) {
+                sorteoEstaActivo = nuevoEstado;
+                actualizarBotonToggle();
+                alert(nuevoEstado ? "✅ El botón de Sorteo ahora es VISIBLE para los clientes." : "🚫 El botón de Sorteo ha sido OCULTADO.");
+            }
+        }
+
+        async function borrarTodoSorteo() {
+            if (!confirm("🚨 ¡ADVERTENCIA EXTREMA! 🚨\n\n¿Estás absolutamente seguro de querer ELIMINAR TODOS los tickets y vaciar la rifa? Esta acción no se puede deshacer.")) return;
+            const { error } = await supabaseClient.from('sorteos').delete().not('numero', 'is', null);
+            if (error) alert("❌ Error al vaciar la rifa: " + error.message);
+            else { alert("🗑️ La base de datos del sorteo está limpia y lista para empezar de nuevo."); cargarSorteosAdmin(); }
+        }
+
+        function descargarExcelSorteo() {
+            let table = document.querySelector("#panel-sorteos table");
+            let rows = table.querySelectorAll("tr");
+            let csv = [];
+            for (let i = 0; i < rows.length; i++) {
+                let row = [], cols = rows[i].querySelectorAll("td, th");
+                for (let j = 0; j < cols.length; j++) row.push('"' + cols[j].innerText + '"');
+                csv.push(row.join(","));
+            }
+            let csvFile = new Blob([csv.join("\n")], { type: "text/csv;charset=utf-8;" });
+            let link = document.createElement("a");
+            link.download = "Rifa_000_al_999.csv";
+            link.href = window.URL.createObjectURL(csvFile);
+            link.click();
+        }
+
+        // ==========================================
+        // LÓGICA DE REPORTE DE ACTIVOS PRO
+        // ==========================================
+        async function cargarReporteActivos() {
+            const tbody = document.getElementById('tabla-body-reporte');
+            tbody.innerHTML = '<tr><td colspan="5" style="padding: 15px; text-align: center; color: #888;">Cargando negocios activos...</td></tr>';
+            
+            const { data, error } = await supabaseClient
+                .from('negocios')
+                .select('created_at, nombre_negocio, rif_o_id, total_votos, categoria_nombre')
+                .eq('estado', 'activo')
+                .order('created_at', { ascending: false });
+            
+            if (error) return tbody.innerHTML = `<tr><td colspan="5" style="padding: 15px; text-align: center; color: #dc3545;">Error: ${error.message}</td></tr>`;
+            if (!data || data.length === 0) return tbody.innerHTML = '<tr><td colspan="5" style="padding: 15px; text-align: center; color: #666;">No hay negocios activos.</td></tr>';
+            
+            let html = '';
+            data.forEach(n => {
+                let fecha = 'N/A';
+                if (n.created_at) {
+                    fecha = new Date(n.created_at).toLocaleDateString('es-VE', { year: 'numeric', month: '2-digit', day: '2-digit' });
+                }
+                
+                let rif = n.rif_o_id && n.rif_o_id.trim() !== "" ? n.rif_o_id : 'Sin RIF/ID';
+                let totalOpiniones = n.total_votos || 0;
+                let rubroTexto = n.categoria_nombre ? n.categoria_nombre : "Sin especificar";
+
+                html += `
+                    <tr style="border-bottom: 1px solid #edf2f7;">
+                        <td style="padding: 12px; color: #555;">${fecha}</td>
+                        <td style="padding: 12px; font-weight: bold; color: #111;">${n.nombre_negocio}</td>
+                        <td style="padding: 12px;">${rif}</td>
+                        <td style="padding: 12px; font-weight: bold; color: #0056b3;">${totalOpiniones}</td>
+                        <td style="padding: 12px; font-weight: bold; color: #FF5722;">${rubroTexto}</td>
+                    </tr>
+                `;
+            });
+            tbody.innerHTML = html;
+        }
+
+        function descargarExcelActivos() {
+            let table = document.querySelector("#panel-reporte table");
+            let rows = table.querySelectorAll("tr");
+            let csv = [];
+            
+            for (let i = 0; i < rows.length; i++) {
+                let row = [], cols = rows[i].querySelectorAll("td, th");
+                for (let j = 0; j < cols.length; j++) {
+                    let textoLimpio = cols[j].innerText.replace(/"/g, '""');
+                    row.push('"' + textoLimpio + '"');
+                }
+                csv.push(row.join(","));
+            }
+            
+            let csvContent = "\uFEFF" + csv.join("\n");
+            let csvFile = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
+            
+            let link = document.createElement("a");
+            link.download = "Lista_Comercios_Activos.csv";
+            link.href = window.URL.createObjectURL(csvFile);
+            link.click();
+        }
+        
+        verificarSesion();
+    </script>
+</body>
+</html>
