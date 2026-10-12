@@ -68,7 +68,7 @@
     </div>
 
     <div class="header-admin">
-        <h1>ENCUÉNTRALO PZO - PANEL CENTRAL PRO v12o20ne</h1>
+        <h1>ENCUÉNTRALO PZO - PANEL CENTRAL PRO v12o20ne2</h1>
         <p>Gestión Inteligente • Categorías Dinámicas y Paginación Ultrarrápida</p>
     </div>
 
@@ -277,52 +277,49 @@
         // 🚀 NUEVA FUNCIÓN DE CARGA ULTRARRÁPIDA CON PAGINACIÓN EN SERVIDOR
         async function cargarDatos() {
             listaContenedor.innerHTML = "<p style='text-align:center; padding:20px;'>Cargando registros...</p>";
-            await actualizarContadoresDePestañas();
+            
+            // Ejecutamos los contadores en segundo plano sin bloquear la interfaz
+            actualizarContadoresDePestañas();
 
             const termino = document.getElementById('buscar-empresa').value.toLowerCase().trim();
+            const inicio = (paginaActual - 1) * itemsPorPagina;
+            const fin = inicio + itemsPorPagina - 1;
 
-            let queryCount = supabaseClient
+            // 🚀 Una sola consulta optimizada que trae los datos y el conteo exacto al mismo tiempo
+            let query = supabaseClient
                 .from('negocios')
-                .select('*', { count: 'exact', head: true })
-                .eq('estado', pestañaActual);
-
-            let queryData = supabaseClient
-                .from('negocios')
-                .select('*')
+                .select('*', { count: 'exact' })
                 .eq('estado', pestañaActual)
                 .order('nombre_negocio', { ascending: true });
 
             if (termino !== "") {
-                queryCount = queryCount.or(`nombre_negocio.ilike.%${termino}%,rif_o_id.ilike.%${termino}%`);
-                queryData = queryData.or(`nombre_negocio.ilike.%${termino}%,rif_o_id.ilike.%${termino}%`);
+                query = query.or(`nombre_negocio.ilike.%${termino}%,rif_o_id.ilike.%${termino}%`);
             }
 
-            const { count, error: errorCount } = await queryCount;
-            if (errorCount) {
-                console.error(errorCount);
+            const { data: negocios, count, error } = await query.range(inicio, fin);
+
+            if (error) {
+                console.error(error);
                 contadorTexto.innerText = "Error de conexión.";
                 return;
             }
 
             const totalRegistros = count || 0;
             const totalPaginas = Math.ceil(totalRegistros / itemsPorPagina) || 1;
-            if (paginaActual > totalPaginas) paginaActual = totalPaginas;
-            if (paginaActual < 1) paginaActual = 1;
-
-            const inicio = (paginaActual - 1) * itemsPorPagina;
-            const fin = inicio + itemsPorPagina - 1;
-
-            const { data: negocios, error } = await queryData.range(inicio, fin);
-            if (error) {
-                contadorTexto.innerText = "Error de conexión.";
-                return;
+            
+            if (paginaActual > totalPaginas) {
+                paginaActual = totalPaginas;
+                if (totalPaginas > 0 && paginaActual !== (inicio / itemsPorPagina) + 1) {
+                    return cargarDatos();
+                }
             }
+            if (paginaActual < 1) paginaActual = 1;
 
             cacheNegociosDescargados = negocios || []; 
             
             contadorTexto.innerText = pestañaActual === 'pendiente' 
                 ? `📋 Tienes (${totalRegistros}) solicitudes pendientes.` 
-                : `🟢 Hay (${totalRegistros}) comercios activos.`;
+                : (pestañaActual === 'activo' ? `🟢 Hay (${totalRegistros}) comercios activos.` : `🚫 Hay (${totalRegistros}) comercios inactivos.`);
                 
             renderizarPaginaServidor(totalRegistros, totalPaginas);
         }
