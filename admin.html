@@ -259,17 +259,18 @@
         }
 
         async function actualizarContadoresDePestañas() {
-            const { data, error } = await supabaseClient.from('negocios').select('estado');
-            if (!error && data) {
-                let p = 0, a = 0, i = 0; 
-                data.forEach(item => { 
-                    if (item.estado === 'pendiente') p++; 
-                    if (item.estado === 'activo') a++;
-                    if (item.estado === 'inactivo') i++; 
-                });
-                document.getElementById('badge-count-pendiente').innerText = p;
-                document.getElementById('badge-count-activo').innerText = a;
-                document.getElementById('badge-count-inactivo').innerText = i;
+            try {
+                const [pRes, aRes, iRes] = await Promise.all([
+                    supabaseClient.from('negocios').select('*', { count: 'exact', head: true }).eq('estado', 'pendiente'),
+                    supabaseClient.from('negocios').select('*', { count: 'exact', head: true }).eq('estado', 'activo'),
+                    supabaseClient.from('negocios').select('*', { count: 'exact', head: true }).eq('estado', 'inactivo')
+                ]);
+
+                if (pRes.count !== null) document.getElementById('badge-count-pendiente').innerText = pRes.count;
+                if (aRes.count !== null) document.getElementById('badge-count-activo').innerText = aRes.count;
+                if (iRes.count !== null) document.getElementById('badge-count-inactivo').innerText = iRes.count;
+            } catch (err) {
+                console.error("Error actualizando contadores:", err);
             }
         }
 
