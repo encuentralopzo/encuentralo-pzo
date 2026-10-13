@@ -68,7 +68,7 @@
     </div>
 
     <div class="header-admin">
-        <h1>ENCUÉNTRALO PZO - PANEL CENTRAL PRO v12o20ne2</h1>
+        <h1>ENCUÉNTRALO PZO - PANEL CENTRAL PRO v1222</h1>
         <p>Gestión Inteligente • Categorías Dinámicas y Paginación Ultrarrápida</p>
     </div>
 
@@ -213,15 +213,23 @@
         }
 
         async function escanearCategoriasExistentes() {
-            categoriasDescubiertas.clear();
-            const { data, error } = await supabaseClient.from('negocios').select('categoria_nombre').not('categoria_nombre', 'is', null);
-            if (!error && data) {
-                data.forEach(row => {
-                    const texto = row.categoria_nombre.trim();
-                    if (texto !== "" && texto !== "Ninguno (Eligió del listado)") categoriasDescubiertas.add(texto);
-                });
+            try {
+                categoriasDescubiertas.clear();
+                const { data, error } = await supabaseClient.from('negocios').select('categoria_nombre').not('categoria_nombre', 'is', null);
+                if (!error && data) {
+                    data.forEach(row => {
+                        if (row.categoria_nombre) {
+                            const texto = row.categoria_nombre.trim();
+                            if (texto !== "" && texto !== "Ninguno (Eligió del listado)") {
+                                categoriasDescubiertas.add(texto);
+                            }
+                        }
+                    });
+                }
+                renderizarModuloGestionCategorias();
+            } catch (err) {
+                console.error("Aviso al escanear rubros:", err);
             }
-            renderizarModuloGestionCategorias();
         }
 
         function renderizarModuloGestionCategorias() {
@@ -278,14 +286,17 @@
         async function cargarDatos() {
             listaContenedor.innerHTML = "<p style='text-align:center; padding:20px;'>Cargando registros...</p>";
             
-            // Ejecutamos los contadores en segundo plano sin bloquear la interfaz
             actualizarContadoresDePestañas();
+
+            // Garantizamos que las categorías estén listas sin bloquear la app
+            if (categoriasDescubiertas.size === 0) {
+                await escanearCategoriasExistentes();
+            }
 
             const termino = document.getElementById('buscar-empresa').value.toLowerCase().trim();
             const inicio = (paginaActual - 1) * itemsPorPagina;
             const fin = inicio + itemsPorPagina - 1;
 
-            // 🚀 Una sola consulta optimizada que trae los datos y el conteo exacto al mismo tiempo
             let query = supabaseClient
                 .from('negocios')
                 .select('*', { count: 'exact' })
@@ -299,7 +310,8 @@
             const { data: negocios, count, error } = await query.range(inicio, fin);
 
             if (error) {
-                console.error(error);
+                console.error("Error al consultar Supabase:", error);
+                listaContenedor.innerHTML = `<p style='text-align:center; color:red; padding:20px;'>❌ Error de conexión: ${error.message}</p>`;
                 contadorTexto.innerText = "Error de conexión.";
                 return;
             }
@@ -309,9 +321,6 @@
             
             if (paginaActual > totalPaginas) {
                 paginaActual = totalPaginas;
-                if (totalPaginas > 0 && paginaActual !== (inicio / itemsPorPagina) + 1) {
-                    return cargarDatos();
-                }
             }
             if (paginaActual < 1) paginaActual = 1;
 
@@ -359,12 +368,10 @@
         }
 
         function inyectarTarjetasEnPantalla(negocios) {
-            // 1. Construimos las opciones dinámicas UNA SOLA VEZ fuera del bucle para máxima velocidad
-            let arrayOpcionesBase = [];
-            categoriasDescubiertas.forEach(nombreCat => {
-                arrayOpcionesBase.push({ texto: nombreCat, nombreCat: nombreCat });
-            });
-            arrayOpcionesBase.sort((a, b) => a.texto.localeCompare(b.texto));
+            listaContenedor.innerHTML = "";
+
+            // 🚀 PRE-ORDENAMOS LAS CATEGORÍAS UNA SOLA VEZ (Máxima velocidad sin bucles pesados)
+            let listaRubrosOrdenados = Array.from(categoriasDescubiertas).sort((a, b) => a.localeCompare(b));
 
             negocios.forEach(negocio => {
                 let rubroSugeridoCliente = negocio.categoria_nombre || "";
@@ -379,9 +386,9 @@
                     }
                 }
 
-                arrayOpcionesBase.forEach(opc => {
-                    const esLaActual = (negocio.categoria_nombre === opc.nombreCat);
-                    opcionesHTML += `<option value="DINAMICA" ${esLaActual ? 'selected' : ''}>✨ ${opc.nombreCat}</option>`;
+                listaRubrosOrdenados.forEach(nombreCat => {
+                    const esLaActual = (negocio.categoria_nombre === nombreCat);
+                    opcionesHTML += `<option value="DINAMICA" ${esLaActual ? 'selected' : ''}>✨ ${nombreCat}</option>`;
                 });
 
                 let arrayFotosOriginal = [];
@@ -460,31 +467,44 @@
 
         function renderizarFotosGrid(idNegocio) {
             const contenedorGrid = document.getElementById(`grid-fotos-${idNegocio}`);
-            if (!contenedorGrid) return; contenedorGrid.innerHTML = "";
+            if (!contenedorGrid) return; 
+            contenedorGrid.innerHTML = "";
+            
             (fotosPorNegocio[idNegocio] || []).forEach((url, index) => {
                 const item = document.createElement('div');
                 item.className = 'item-foto-editable';
-                item.innerHTML = `<img src="${url}" loading="lazy"><button class="btn-borrar-foto" onclick="eliminarFotoDelAlbum(${idNegocio}, ${index})">×</button>`;
-                contenedorGrid.appendChild(item);
-            });
-        }
-
-        function renderizarFotosGrid(idNegocio) {
-            const contenedorGrid = document.getElementById(`grid-fotos-${idNegocio}`);
-            if (!contenedorGrid) return; contenedorGrid.innerHTML = "";
-            (fotosPorNegocio[idNegocio] || []).forEach((url, index) => {
-                const item = document.createElement('div');
-                item.className = 'item-foto-editable';
-                item.innerHTML = `<img src="${url}"><button class="btn-borrar-foto" onclick="eliminarFotoDelAlbum(${idNegocio}, ${index})">×</button>`;
+                // 🚀 Carga perezosa (lazy) nativa para que el navegador no colapse descargando todas las fotos de golpe
+                item.innerHTML = `
+                    <img src="${url}" loading="lazy" alt="Foto negocio">
+                    <button class="btn-borrar-foto" onclick="eliminarFotoDelAlbum(${idNegocio}, ${index})">×</button>
+                `;
                 contenedorGrid.appendChild(item);
             });
         }
 
         function cargarFotoDesdePC(inputElement, idNegocio) {
-            const archivo = inputElement.files[0]; if (!archivo) return;
-            if (fotosPorNegocio[idNegocio].length >= 2) return alert("Máximo 2 fotos permitidas.");
+            const archivo = inputElement.files[0]; 
+            if (!archivo) return;
+            
+            if (fotosPorNegocio[idNegocio].length >= 2) {
+                alert("⚠️ Máximo 2 fotos permitidas.");
+                inputElement.value = "";
+                return;
+            }
+
+            // Validación de peso preventiva (evita que suban imágenes mayores a 300 KB desde la PC)
+            if (archivo.size > 300 * 1024) {
+                alert("🚨 La foto es muy pesada (máximo recomendado: 300 KB). Por favor, usa una imagen más ligera o un enlace URL para mantener la velocidad del sistema.");
+                inputElement.value = "";
+                return;
+            }
+
             const lector = new FileReader();
-            lector.onload = function(e) { fotosPorNegocio[idNegocio].push(e.target.result); renderizarFotosGrid(idNegocio); };
+            lector.onload = function(e) { 
+                fotosPorNegocio[idNegocio].push(e.target.result); 
+                renderizarFotosGrid(idNegocio); 
+                inputElement.value = "";
+            };
             lector.readAsDataURL(archivo);
         }
 
@@ -544,7 +564,11 @@
 
         async function verificarSesion() {
             const { data: { session } } = await supabaseClient.auth.getSession();
-            if (session) { document.getElementById('bloqueo-login').style.display = 'none'; cargarDatos(); }
+            if (session) { 
+                document.getElementById('bloqueo-login').style.display = 'none'; 
+                await escanearCategoriasExistentes(); // 👈 NUEVO: Carga los rubros al entrar
+                cargarDatos(); 
+            }
         }
 
         async function iniciarSesionAdmin() {
