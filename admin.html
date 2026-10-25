@@ -136,6 +136,7 @@
                             <th style="padding: 12px; border-bottom: 2px solid #ddd;">Fecha de Registro</th>
                             <th style="padding: 12px; border-bottom: 2px solid #ddd;">Nombre del Negocio</th>
                             <th style="padding: 12px; border-bottom: 2px solid #ddd;">RIF</th>
+                            <th style="padding: 12px; border-bottom: 2px solid #ddd;">Promotor</th> <!-- NUEVA COLUMNA -->
                             <th style="padding: 12px; border-bottom: 2px solid #ddd;">Nº de Opiniones</th>
                             <th style="padding: 12px; border-bottom: 2px solid #ddd;">Tipo de Rubro</th>
                         </tr>
@@ -445,6 +446,21 @@
                                 <option value="San Félix" ${negocio.sector === 'San Félix' ? 'selected' : ''}>San Félix</option>
                             </select>
                         </div>
+
+<!-- NUEVO CAMPO DE EDICIÓN DE PROMOTOR -->
+                        <div class="form-edit-group">
+                            <label>Promotor:</label>
+                            <select id="edit-promotor-${negocio.id}">
+                                <option value="" ${!negocio.promotor ? 'selected' : ''}>-- Sin asignar --</option>
+                                <option value="Promotor 1" ${negocio.promotor === 'Promotor 1' ? 'selected' : ''}>Promotor 1</option>
+                                <option value="Promotor 2" ${negocio.promotor === 'Promotor 2' ? 'selected' : ''}>Promotor 2</option>
+                                <option value="Promotor 3" ${negocio.promotor === 'Promotor 3' ? 'selected' : ''}>Promotor 3</option>
+                                <option value="Promotor 4" ${negocio.promotor === 'Promotor 4' ? 'selected' : ''}>Promotor 4</option>
+                                <option value="Promotor 5" ${negocio.promotor === 'Promotor 5' ? 'selected' : ''}>Promotor 5</option>
+                                <option value="Promotor 6" ${negocio.promotor === 'Promotor 6' ? 'selected' : ''}>Promotor 6</option>
+                            </select>
+                        </div>
+
                         <div class="form-edit-group"><label>Dirección:</label><input type="text" id="edit-direccion-${negocio.id}" value="${negocio.direccion || ''}"></div>
                         <div class="form-edit-group"><label>Horario:</label><input type="text" id="edit-horario-${negocio.id}" value="${negocio.horario || ''}"></div>
                         <div class="form-edit-group"><label>Maps:</label><input type="text" id="edit-maps-${negocio.id}" value="${negocio.maps || ''}"></div>
@@ -525,6 +541,7 @@
             let tags = document.getElementById(`edit-tags-${id}`).value;
             let promoTexto = document.getElementById(`edit-promocion-${id}`).value.trim();
             const sector = document.getElementById(`edit-sector-${id}`).value;
+            const promotorEditado = document.getElementById(`edit-promotor-${id}`).value; // <--- NUEVA LÍNEA
             const direccion = document.getElementById(`edit-direccion-${id}`).value;
             const espacioEditado = document.getElementById(`edit-espacio-${id}`).value;
             const horario = document.getElementById(`edit-horario-${id}`).value;
@@ -546,7 +563,7 @@
             
             const { error } = await supabaseClient.from('negocios').update({ 
                 nombre_negocio: nombre, categoria_id: categoriaIdFinal, categoria_nombre: categoriaNombreFinal, 
-                productos_tags: tags, promocion_texto: promoTexto || null, sector: sector, espacio: espacioEditado === "" ? null : espacioEditado, direccion: direccion, 
+                productos_tags: tags, promocion_texto: promoTexto || null, sector: sector, promotor: promotorEditado || null, // <--- NUEVO CAMPO EN EL UPDATEespacio: espacioEditado === "" ? null : espacioEditado, direccion: direccion, 
                 horario: horario, maps: maps, whatsapp: whatsapp, instagram: instagram, fotos_urls: JSON.stringify(fotosPorNegocio[id])
             }).eq('id', id);
 
@@ -675,16 +692,16 @@
         // ==========================================
         async function cargarReporteActivos() {
             const tbody = document.getElementById('tabla-body-reporte');
-            tbody.innerHTML = '<tr><td colspan="5" style="padding: 15px; text-align: center; color: #888;">Cargando negocios activos...</td></tr>';
+            tbody.innerHTML = '<tr><td colspan="6" style="padding: 15px; text-align: center; color: #888;">Cargando negocios activos...</td></tr>';
             
             const { data, error } = await supabaseClient
                 .from('negocios')
-                .select('created_at, nombre_negocio, rif_o_id, total_votos, categoria_nombre')
+                .select('created_at, nombre_negocio, rif_o_id, total_votos, categoria_nombre, promotor') // <--- AÑADIDO promotor
                 .eq('estado', 'activo')
                 .order('created_at', { ascending: false });
             
-            if (error) return tbody.innerHTML = `<tr><td colspan="5" style="padding: 15px; text-align: center; color: #dc3545;">Error: ${error.message}</td></tr>`;
-            if (!data || data.length === 0) return tbody.innerHTML = '<tr><td colspan="5" style="padding: 15px; text-align: center; color: #666;">No hay negocios activos.</td></tr>';
+            if (error) return tbody.innerHTML = `<tr><td colspan="6" style="padding: 15px; text-align: center; color: #dc3545;">Error: ${error.message}</td></tr>`;
+            if (!data || data.length === 0) return tbody.innerHTML = '<tr><td colspan="6" style="padding: 15px; text-align: center; color: #666;">No hay negocios activos.</td></tr>';
             
             let html = '';
             data.forEach(n => {
@@ -696,12 +713,14 @@
                 let rif = n.rif_o_id && n.rif_o_id.trim() !== "" ? n.rif_o_id : 'Sin RIF/ID';
                 let totalOpiniones = n.total_votos || 0;
                 let rubroTexto = n.categoria_nombre ? n.categoria_nombre : "Sin especificar";
+                let promotorTexto = n.promotor ? n.promotor : "Sin asignar"; // <--- NUEVA VARIABLE
 
                 html += `
                     <tr style="border-bottom: 1px solid #edf2f7;">
                         <td style="padding: 12px; color: #555;">${fecha}</td>
                         <td style="padding: 12px; font-weight: bold; color: #111;">${n.nombre_negocio}</td>
                         <td style="padding: 12px;">${rif}</td>
+                        <td style="padding: 12px; font-weight: bold; color: #007BFF;">${promotorTexto}</td> <!-- <--- NUEVA CELDA -->
                         <td style="padding: 12px; font-weight: bold; color: #0056b3;">${totalOpiniones}</td>
                         <td style="padding: 12px; font-weight: bold; color: #FF5722;">${rubroTexto}</td>
                     </tr>

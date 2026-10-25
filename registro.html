@@ -97,6 +97,20 @@
                 <input type="text" id="rif_o_id" placeholder="Ej: J-12345678-0 o V-12345678" required>
             </div>
 
+<!-- NUEVO CAMPO: PROMOTOR QUE LO ATENDIÓ -->
+            <div class="form-group">
+                <label for="promotor">👤 Promotor que lo Atendió:</label>
+                <select id="promotor" required>
+                    <option value="" disabled selected>-- Elige el promotor --</option>
+                    <option value="Promotor 1">Promotor 1</option>
+                    <option value="Promotor 2">Promotor 2</option>
+                    <option value="Promotor 3">Promotor 3</option>
+                    <option value="Promotor 4">Promotor 4</option>
+                    <option value="Promotor 5">Promotor 5</option>
+                    <option value="Promotor 6">Promotor 6</option>
+                </select>
+            </div>
+
             <div class="form-group">
                 <label for="categoria">📂 Seleccionar Rubro de Actividad:</label>
                 <select id="categoria" required></select>
@@ -318,6 +332,7 @@
             const tags = document.getElementById('productos_tags').value.trim();
             const sector = document.getElementById('sector').value;
             const espacio = document.getElementById('espacio').value; // NUEVA LÍNEA
+            const promotor = document.getElementById('promotor').value; // <--- NUEVA LÍNEA
             const direccion = document.getElementById('direccion').value.trim();
             const horario = document.getElementById('horario').value.trim();
             const maps = document.getElementById('maps').value.trim();
@@ -347,6 +362,7 @@
                         categoria_id: categoriaIdFinal, categoria_nombre: categoriaNombreFinal,
                         productos_tags: tags, sector: sector, espacio: espacio, direccion: direccion, maps: maps, // <--- SECTOR AGREGADO AQUÍ
                         horario: horario, whatsapp: whatsapp, instagram: instagram,
+                        promotor: promotor, // <--- NUEVO CAMPO AGREGADO AQUÍ
                         fotos_urls: stringJSONFotos, estado: 'pendiente'
                     }]);
 
